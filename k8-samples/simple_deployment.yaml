@@ -1,0 +1,41 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: hello-nosecctx
+  namespace: app-team-a
+  labels:
+    app: hello-nosecctx
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: hello-nosecctx
+  template:
+    metadata:
+      labels:
+        app: hello-nosecctx
+        # (Optional) Also safe as a label on the Pod template if you prefer
+    spec:
+      containers:
+      - name: web
+        image: nginx:1.25-alpine
+        ports:
+        - containerPort: 80
+        readinessProbe:
+          httpGet: { path: /, port: 80 }
+          periodSeconds: 10
+        livenessProbe:
+          httpGet: { path: /, port: 80 }
+          periodSeconds: 20
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: hello-nosecctx-svc
+  namespace: app-team-a
+spec:
+  selector:
+    app: hello-secctx
+  ports:
+  - port: 80
+    targetPort: 80
