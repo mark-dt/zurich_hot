@@ -20,84 +20,126 @@ if [[ ! -f "$COMMANDS_FILE" ]]; then
   exit 1
 fi
 
-# Ensure sshpass exists (since you're using passwords)
 if ! command -v sshpass >/dev/null 2>&1; then
-  echo "ERROR: sshpass is required for password auth but is not installed." >&2
-  echo "Install:" >&2
+  echo "ERROR: sshpass is required but not installed." >&2
   echo "  Debian/Ubuntu: sudo apt-get install sshpass" >&2
   echo "  RHEL/CentOS:   sudo yum install sshpass" >&2
+  echo "  macOS:          brew install esolitos/ipa/sshpass" >&2
   exit 2
 fi
 
-# Read commands (preserve newlines)
 COMMANDS="$(cat "$COMMANDS_FILE")"
 
-# Read CSV lines (skip header), handle CRLF, drop empty lines
-mapfile -t LINES < <(tail -n +2 "$CSV_FILE" | sed 's/\r$//' | sed '/^\s*$/d')
+# Read CSV lines (skip header), strip CRLF and blank lines
+# Use a while-read loop instead of mapfile for macOS Bash 3 compatibility
+LINES=()
+while IFS= read -r _line || [[ -n "$_line" ]]; do
+  [[ -z "$_line" ]] && continue
+  LINES+=("$_line")
+done < <(tail -n +2 "$CSV_FILE" | sed 's/\r$//' | sed '/^[[:space:]]*$/d')
 
-run_one() {
-  local line="$1"
-  local username password ip ssh_cmd
-  local host label out err rc
+if [[ ${#LINES[@]} -eq 0 ]]; then
+  echo "ERROR: No hosts found in $CSV_FILE" >&2
+  exit 1
+fi
 
-  IFS=',' read -r username password ip ssh_cmd <<< "$line"
+echo "Running commands on ${#LINES[@]} host(s) with parallelism=$PARALLEL"
 
-  # Remove surrounding quotes if present
-  username="${username//\"/}"
-  password="${password//\"/}"
-  ip="${ip//\"/}"
-  ssh_cmd="${ssh_cmd//\"/}"
+# Track results for summary
+RESULT_DIR="$LOG_DIR/.results"
+rm -rf "$RESULT_DIR"
+mkdir -p "$RESULT_DIR"
 
-  # Basic validation
-  if [[ -z "$username" || -z "$password" || -z "$ip" ]]; then
-    echo "ERROR: Missing username/password/ip in line: $line" >&2
-    return 3
-  fi
+export SSH_TIMEOUT CMD_TIMEOUT LOG_DIR COMMANDS RESULT_DIR
 
-  host="${username}@${ip}"
-  label="$(echo "$host" | tr '@' '_' | tr '.' '_' )"
-  out="$LOG_DIR/${label}.out.log"
-  err="$LOG_DIR/${label}.err.log"
+# Run in parallel using a temp script for portability
+RUNNER="$(mktemp)"
+trap 'rm -f "$RUNNER"' EXIT
 
-  echo "[$(date -Is)] START $host" >>"$out"
+cat > "$RUNNER" <<'SCRIPT'
+#!/usr/bin/env bash
+set -uo pipefail
 
-  # Use sshpass; run commands via stdin
-  # - StrictHostKeyChecking=accept-new keeps it non-interactive while still tracking known_hosts
-  # - UserKnownHostsFile isolates known_hosts to your LOG_DIR
-  if timeout "$CMD_TIMEOUT" \
-      sshpass -p "$password" \
-      ssh -o PubkeyAuthentication=no \
+# Portable timestamp (works on both macOS and GNU date)
+timestamp() { date '+%Y-%m-%dT%H:%M:%S%z'; }
+
+line="$1"
+username="" password="" ip="" ssh_cmd=""
+
+IFS=',' read -r username password ip ssh_cmd <<< "$line"
+
+username="${username//\"/}"
+password="${password//\"/}"
+ip="${ip//\"/}"
+ssh_cmd="${ssh_cmd//\"/}"
+
+if [[ -z "$username" || -z "$password" || -z "$ip" ]]; then
+  echo "SKIP: missing fields in line: $line" >&2
+  exit 0
+fi
+
+host="${username}@${ip}"
+label="$(echo "$host" | tr '@.' '__')"
+out="$LOG_DIR/${label}.out.log"
+err="$LOG_DIR/${label}.err.log"
+
+# The ssh_cmd column is informational (e.g. "ssh user@host"), not a remote command to run.
+# Always use COMMANDS from the commands file.
+cmds="$COMMANDS"
+
+echo "[$(timestamp)] START $host"
+
+MAX_RETRIES=2
+rc=0
+for attempt in $(seq 1 "$MAX_RETRIES"); do
+  rc=0
+  sshpass -p "$password" \
+      ssh -T \
+          -o PubkeyAuthentication=no \
           -o PreferredAuthentications=password \
           -o ConnectTimeout="$SSH_TIMEOUT" \
           -o ServerAliveInterval=15 \
           -o ServerAliveCountMax=2 \
-          -o StrictHostKeyChecking=accept-new \
-          -o UserKnownHostsFile="$LOG_DIR/known_hosts" \
-          "${username}@${ip}" "bash -s" \
-      >"$out" 2>"$err" <<<"$COMMANDS"
-  then
-    rc=0
-  else
-    rc=$?
-  fi
+          -o StrictHostKeyChecking=no \
+          -o UserKnownHostsFile=/dev/null \
+          -o LogLevel=ERROR \
+          "$host" "bash -c $(printf '%q' "$cmds")" \
+      >>"$out" 2>>"$err" || rc=$?
+  if [[ $rc -eq 0 ]]; then break; fi
+  echo "  RETRY $host (attempt $attempt/$MAX_RETRIES, rc=$rc)"
+  sleep 2
+done
 
-  echo "[$(date -Is)] END $host rc=$rc" >>"$out"
-  return "$rc"
-}
+echo "[$(timestamp)] END $host rc=$rc" >> "$out"
+echo "$rc" > "$RESULT_DIR/$label"
 
-export -f run_one
-export SSH_TIMEOUT CMD_TIMEOUT LOG_DIR COMMANDS
+if [[ $rc -eq 0 ]]; then
+  echo "  OK   $host"
+else
+  echo "  FAIL $host (rc=$rc, see $err)"
+fi
 
-# Run in parallel. The "bash -c" wrapper ensures the function is available in each subshell.
-printf "%s\n" "${LINES[@]}" | xargs -P "$PARALLEL" -n 1 -I {} bash -c 'run_one "$@"' _ "{}"
+exit 0
+SCRIPT
+chmod +x "$RUNNER"
+
+printf "%s\n" "${LINES[@]}" | xargs -P "$PARALLEL" -I {} "$RUNNER" "{}"
 
 # Summary
+echo ""
 echo "==== SUMMARY ===="
-shopt -s nullglob
-for f in "$LOG_DIR"/*.out.log; do
-  if grep -q "rc=0" "$f"; then
-    echo "OK   - $(basename "$f" .out.log)"
+ok=0
+fail=0
+for f in "$RESULT_DIR"/*; do
+  label="$(basename "$f")"
+  rc="$(cat "$f")"
+  if [[ "$rc" == "0" ]]; then
+    echo "  OK   $label"
+    ((ok++))
   else
-    echo "FAIL - $(basename "$f" .out.log) (see corresponding .err.log)"
+    echo "  FAIL $label (rc=$rc)"
+    ((fail++))
   fi
 done
+echo "---- $ok ok, $fail failed out of $((ok + fail)) hosts ----"
+echo "Logs in: $LOG_DIR/"

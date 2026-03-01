@@ -44,3 +44,4 @@ out.txt
 *.bak
 *.txt
 ssh_credentials.csv
+logs

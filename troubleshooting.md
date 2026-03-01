@@ -60,3 +60,7 @@ gcloud compute instances describe simple-vm-1 \
 
 
 sudo journalctl -u google-startup-scripts.service -b --no-pager -n 300
+
+
+# restart all of namespace
+kubectl -n easytrade rollout restart deploy,sts,ds

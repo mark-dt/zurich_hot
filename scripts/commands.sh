@@ -1,4 +1,3 @@
-
 hostname
 uptime
-df -h
+kubectl -n easytrade rollout restart deploy,sts,ds
