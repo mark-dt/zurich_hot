@@ -47,6 +47,8 @@ passwd -u "$USERNAME" || true
 systemctl enable --now ssh || systemctl enable --now sshd || true
 systemctl restart ssh || systemctl restart sshd || true
 
+sudo apt-get -y install git-all
+
 # -----------------------------
 # K3s: install + kubeconfig
 # -----------------------------

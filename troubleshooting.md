@@ -36,6 +36,15 @@ kubectl create secret generic dynatrace-otelcol-dt-api-credentials --from-litera
 
 kubectl -n dynatrace create secret generic dynakube --from-literal="apiToken=REDACTED_DT_API_TOKEN" --from-literal="dataIngestToken=REDACTED_DT_INGEST_TOKEN"
 
+# gcp ssh login
+gcloud compute ssh simple-vm-1 --zone europe-west1-b
+
+# get gcp metadata
+sudo curl -fsS -H "Metadata-Flavor: Google" \
+  "http://metadata.google.internal/computeMetadata/v1/instance/attributes/startup-script" \
+  | nl -ba | sed -n '40,60p'
+
+
 # AG pvc not starting
 kubectl describe pod gcp-k3-activegate-0 -n dynatrace 
 
@@ -43,3 +52,11 @@ kubectl delete pod -n kube-system -l app=local-path-provisioner
 
 # gcp tf startup script
 sudo systemctl status google-startup-scripts.service
+
+
+gcloud compute instances describe simple-vm-1 \
+  --zone europe-west1-b \
+  --format="get(metadata.items)"
+
+
+sudo journalctl -u google-startup-scripts.service -b --no-pager -n 300

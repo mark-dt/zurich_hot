@@ -43,3 +43,4 @@ out.txt
 *.swp
 *.bak
 *.txt
+ssh_credentials.csv

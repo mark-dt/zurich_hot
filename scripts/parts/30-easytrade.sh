@@ -1,6 +1,8 @@
 #!/usr/bin/env bash
 set -euo pipefail
 
+exec > >(tee -a /var/log/startup-parts.log) 2>&1
+
 # --- Config ---
 NAMESPACE="${EASYTRADE_NAMESPACE:-easytrade}"
 INSTALL_PROBLEM_PATTERNS="${EASYTRADE_PROBLEM_PATTERNS:-false}"   # true|false
@@ -68,17 +70,38 @@ else
   log "Service ${FRONTEND_SVC} not found (yet). Skipping Service patch."
 fi
 
-# Wait for pods to come up (don’t hard fail if some take longer; just report status)
-log "Waiting for pods to become Ready (up to ~10 minutes)..."
-for i in {1..120}; do
-  NOT_READY="$(sudo k3s kubectl --kubeconfig "${KUBECONFIG_PATH}" -n "${NAMESPACE}" get pods --no-headers 2>/dev/null \
-    | awk '$2 !~ /^([0-9]+)\/\1$/ || $3 != "Running" {print}' | wc -l || true)"
-  if [[ "${NOT_READY}" == "0" ]]; then
-    log "All EasyTrade pods are Running/Ready."
+
+# Wait for pods to exist, then become Ready (robust + no parsing)
+log "Waiting for EasyTrade pods to appear..."
+for i in {1..60}; do
+  POD_COUNT="$(sudo k3s kubectl --kubeconfig "${KUBECONFIG_PATH}" -n "${NAMESPACE}" get pods --no-headers 2>/dev/null | wc -l | tr -d '[:space:]' || true)"
+  if [[ "${POD_COUNT}" != "" && "${POD_COUNT}" != "0" ]]; then
     break
   fi
-  sleep 5
+  sleep 2
 done
+
+log "Waiting for EasyTrade pods to become Ready (timeout: 10 minutes)..."
+if ! sudo k3s kubectl --kubeconfig "${KUBECONFIG_PATH}" -n "${NAMESPACE}" \
+  wait --for=condition=Ready pod --all --timeout=10m; then
+
+  log "WARNING: Timed out waiting for all pods to be Ready. Current status:"
+  sudo k3s kubectl --kubeconfig "${KUBECONFIG_PATH}" -n "${NAMESPACE}" get pods -o wide || true
+
+  log "Describing non-ready pods (best-effort):"
+  # List pods that are not Ready (READY column not equal like 1/1, 2/2, etc.)
+  sudo k3s kubectl --kubeconfig "${KUBECONFIG_PATH}" -n "${NAMESPACE}" get pods --no-headers 2>/dev/null \
+    | awk '$2 !~ /^([0-9]+)\/\1$/ {print $1}' \
+    | while read -r p; do
+        log "---- describe pod/${p} ----"
+        sudo k3s kubectl --kubeconfig "${KUBECONFIG_PATH}" -n "${NAMESPACE}" describe pod "${p}" || true
+      done
+
+  # Don't hard-fail the whole startup; continue
+  log "Continuing startup despite non-ready pods."
+else
+  log "All EasyTrade pods are Ready."
+fi
 
 # Print access hint
 NODE_IP="$(curl -fsS -H 'Metadata-Flavor: Google' \
