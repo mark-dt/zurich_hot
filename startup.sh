@@ -40,15 +40,9 @@ done
 
 # ─── 5. Deploy to Kubernetes ────────────────────────────────────────────────
 echo ">>> Applying Kubernetes manifests..."
-
-# Resolve VM external IP and patch the ingress manifest
-EXTERNAL_IP=$(curl -s -H "Metadata-Flavor: Google" http://metadata.google.internal/computeMetadata/v1/instance/network-interfaces/0/access-configs/0/external-ip)
-echo ">>> VM external IP: ${EXTERNAL_IP}"
-sed -i "s/PLACEHOLDER_IP/${EXTERNAL_IP}/g" "${WORKSHOP_DIR}/k8s/ingress.yaml"
-
 kubectl apply -f "${WORKSHOP_DIR}/k8s/namespace.yaml"
 
-for manifest in frontend order-service payment-service inventory-service notification-service load-generator ingress; do
+for manifest in frontend order-service payment-service inventory-service notification-service load-generator; do
   kubectl apply -f "${WORKSHOP_DIR}/k8s/${manifest}.yaml"
 done
 
