@@ -1,0 +1,66 @@
+name: "Release: Factory Crisis"
+
+on:
+  workflow_dispatch:
+    inputs:
+      action:
+        description: "Enable or disable the problem pattern"
+        required: true
+        type: choice
+        options:
+          - enable
+          - disable
+
+env:
+  EASYTRADE_BASE_URL: ${{ secrets.EASYTRADE_BASE_URL }}
+  DT_ENV_URL: ${{ secrets.DT_ENV_URL }}
+  DT_API_TOKEN: ${{ secrets.DT_API_TOKEN }}
+  FF_KEY: factory_crisis
+  FF_DISPLAY: "Factory Crisis"
+
+jobs:
+  toggle:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Set flag value
+        id: flag
+        run: |
+          if [ "${{ inputs.action }}" = "enable" ]; then
+            echo "enabled=true" >> "$GITHUB_OUTPUT"
+            echo "version=release-factory-crisis-${{ github.run_number }}" >> "$GITHUB_OUTPUT"
+          else
+            echo "enabled=false" >> "$GITHUB_OUTPUT"
+            echo "version=rollback-factory-crisis-${{ github.run_number }}" >> "$GITHUB_OUTPUT"
+          fi
+
+      - name: Toggle feature flag
+        run: |
+          HTTP_STATUS=$(curl -sS -o /tmp/response.txt -w "%{http_code}" \
+            -X PUT "${EASYTRADE_BASE_URL%/}/feature-flag-service/v1/flags/${FF_KEY}" \
+            -H "Content-Type: application/json" \
+            -d "{\"enabled\": ${{ steps.flag.outputs.enabled }}}")
+          echo "Response: $(cat /tmp/response.txt)"
+          echo "HTTP Status: $HTTP_STATUS"
+          if [ "$HTTP_STATUS" -ge 400 ]; then
+            echo "::error::Feature flag toggle failed with status $HTTP_STATUS"
+            exit 1
+          fi
+
+      - name: Send Dynatrace deployment event
+        run: |
+          curl -sS -X POST "${DT_ENV_URL%/}/api/v2/events/ingest" \
+            -H "Authorization: Api-Token ${DT_API_TOKEN}" \
+            -H "Content-Type: application/json" \
+            -d "{
+              \"eventType\": \"CUSTOM_DEPLOYMENT\",
+              \"title\": \"EasyTrade: ${FF_DISPLAY} ${{ inputs.action }}d\",
+              \"properties\": {
+                \"dt.event.description\": \"Feature flag '${FF_KEY}' set to ${{ steps.flag.outputs.enabled }}. Halts credit card manufacturing — blocks third-party service processing.\",
+                \"dt.event.deployment.project\": \"easytrade\",
+                \"dt.event.deployment.version\": \"${{ steps.flag.outputs.version }}\",
+                \"dt.event.deployment.release_stage\": \"production\",
+                \"dt.event.deployment.ci_back_link\": \"${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}\",
+                \"featureFlag\": \"${FF_KEY}\",
+                \"flagEnabled\": \"${{ steps.flag.outputs.enabled }}\"
+              }
+            }"

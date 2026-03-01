@@ -1,0 +1,64 @@
+{
+  "_comment": "Dynatrace Workflow definition — import this via Dynatrace UI: Automations > Workflows > Upload",
+  "title": "Auto-Remediation: EasyTrade Feature Flag Rollback",
+  "description": "Detects failure rate increase on EasyTrade services and triggers GitHub Actions to disable the offending feature flag.",
+  "trigger": {
+    "eventTrigger": {
+      "triggerConfiguration": {
+        "type": "davis-problem",
+        "value": {
+          "categories": {
+            "error": true
+          },
+          "entityTags": {
+            "app": ["easytrade"]
+          }
+        }
+      }
+    }
+  },
+  "tasks": {
+    "identify_flag": {
+      "name": "identify_flag",
+      "action": "dynatrace.automations:run-javascript",
+      "description": "Determine which feature flag caused the problem based on affected service",
+      "input": {
+        "script": "export default async function ({ execution_id }) {\n  const ex = await fetch(`/platform/automation/v1/executions/${execution_id}`);\n  const data = await ex.json();\n  const problemTitle = data.params?.event?.['event.name'] || '';\n  const affectedEntity = data.params?.event?.['affected_entity_ids']?.[0] || '';\n  \n  // Map known EasyTrade services to their feature flags\n  const flagMap = {\n    'broker': 'high_cpu_usage',\n    'credit-card': 'factory_crisis',\n    'third-party': 'factory_crisis',\n    'offer': 'ergo_aggregator_slowdown',\n    'aggregator': 'ergo_aggregator_slowdown',\n    'login': 'db_not_responding',\n    'account': 'db_not_responding',\n    'trade': 'db_not_responding'\n  };\n  \n  let matchedFlag = null;\n  const lowerTitle = problemTitle.toLowerCase();\n  for (const [keyword, flag] of Object.entries(flagMap)) {\n    if (lowerTitle.includes(keyword) || affectedEntity.toLowerCase().includes(keyword)) {\n      matchedFlag = flag;\n      break;\n    }\n  }\n  \n  // Default to db_not_responding if no match\n  if (!matchedFlag) matchedFlag = 'db_not_responding';\n  \n  return { ff_key: matchedFlag, problemTitle, affectedEntity };\n}"
+      },
+      "position": {
+        "x": 0,
+        "y": 1
+      }
+    },
+    "trigger_github_remediation": {
+      "name": "trigger_github_remediation",
+      "action": "dynatrace.automations:http-function",
+      "description": "Trigger GitHub Actions auto-remediation workflow via repository_dispatch",
+      "input": {
+        "url": "https://api.github.com/repos/OWNER/REPO/dispatches",
+        "method": "POST",
+        "headers": {
+          "Accept": "application/vnd.github+json",
+          "Authorization": "Bearer {{ env.GITHUB_PAT }}",
+          "X-GitHub-Api-Version": "2022-11-28"
+        },
+        "body": {
+          "event_type": "remediation",
+          "client_payload": {
+            "ff_key": "{{ result('identify_flag').ff_key }}"
+          }
+        }
+      },
+      "predecessors": ["identify_flag"],
+      "conditions": {
+        "states": {
+          "identify_flag": "OK"
+        }
+      },
+      "position": {
+        "x": 0,
+        "y": 2
+      }
+    }
+  }
+}
