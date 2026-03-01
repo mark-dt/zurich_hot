@@ -20,6 +20,10 @@ cat >/opt/startup/parts/40-easytrade-ingress.sh <<'__PART_40_EASYTRADE_INGRESS__
 ${easytrade_ingress}
 __PART_40_EASYTRADE_INGRESS__
 
+cat >/opt/startup/parts/50-argocd.sh <<'__PART_50_ARGOCD__'
+${argocd}
+__PART_50_ARGOCD__
+
 chmod +x /opt/startup/parts/*.sh
 
 # Run parts in deterministic order

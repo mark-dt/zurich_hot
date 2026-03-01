@@ -60,19 +60,11 @@ resource "google_compute_instance" "vm" {
         dynatrace_operator_token = var.dynatrace_operator_token
         dynatrace_data_token     = var.dynatrace_data_ingest_token
       })
-
       easytrade = file("${path.module}/scripts/parts/30-easytrade.sh")
       easytrade_ingress = file("${path.module}/scripts/parts/40-easytrade-ingress.sh")
-
+      argocd = file("${path.module}/scripts/parts/50-argocd.sh")
     })
   }
-
-  /*
-  metadata_startup_script = <<-EOT
-  
-
-  EOT
-  */
 
   tags = ["ssh"]
 }

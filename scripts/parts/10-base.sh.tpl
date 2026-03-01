@@ -165,7 +165,9 @@ spec:
   metadataEnrichment:
     enabled: true
 
+  networkZone: $DYNKUBE_NAME
   oneAgent:
+    hostGroup: $DYNKUBE_NAME
     cloudNativeFullStack:
       tolerations:
         - effect: NoSchedule
@@ -185,5 +187,5 @@ spec:
         memory: 512Mi
       limits:
         cpu: 1000m
-        memory: 1.5Gi
+        memory: 2.5Gi
 EOF
