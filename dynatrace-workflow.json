@@ -35,7 +35,7 @@
       "action": "dynatrace.automations:http-function",
       "description": "Trigger GitHub Actions auto-remediation workflow via repository_dispatch",
       "input": {
-        "url": "https://api.github.com/repos/OWNER/REPO/dispatches",
+        "url": "https://api.github.com/repos/mark-dt/zurich_hot/dispatches",
         "method": "POST",
         "headers": {
           "Accept": "application/vnd.github+json",

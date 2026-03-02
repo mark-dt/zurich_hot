@@ -18,72 +18,49 @@ on:
 env:
   DT_ENV_URL: ${{ secrets.DT_ENV_URL }}
   DT_API_TOKEN: ${{ secrets.DT_API_TOKEN }}
+  WORKSHOP_IP: ${{ secrets.WORKSHOP_IP }}
 
 jobs:
   deploy:
     runs-on: ubuntu-latest
 
     steps:
-      - name: Authenticate to GCP
-        uses: google-github-actions/auth@v2
-        with:
-          credentials_json: ${{ secrets.GCP_SA_KEY }}
+      - name: Checkout code
+        uses: actions/checkout@v4
 
-      - name: Set up gcloud
-        uses: google-github-actions/setup-gcloud@v2
-
-      - name: Deploy bad release via SSH
+      - name: Deploy bad release via HTTP
         if: inputs.action == 'deploy-bad-release'
         run: |
-          gcloud compute ssh ${{ secrets.VM_NAME }} \
-            --zone=${{ secrets.VM_ZONE }} \
-            --project=${{ secrets.GCP_PROJECT }} \
-            --command='
-              PODS=$(sudo KUBECONFIG=/etc/rancher/k3s/k3s.yaml kubectl get pods -n workshop -l app=payment-service -o jsonpath='"'"'{.items[*].status.podIP}'"'"')
-              for IP in $PODS; do
-                echo "Setting failure rate on $IP..."
-                wget -q -O- --post-data='"'"'{"rate":${{ inputs.failure_rate }}}'"'"' --header='"'"'Content-Type: application/json'"'"' "http://$IP:3002/admin/failure-rate"
-                echo ""
-              done
-            '
+          curl -X POST \
+            -H "Content-Type: application/json" \
+            -d '{"rate":${{ inputs.failure_rate }}}' \
+            "https://workshop.${{ env.WORKSHOP_IP }}.nip.io/admin/failure-rate"
 
-      - name: Rollback via SSH
+      - name: Rollback via HTTP
         if: inputs.action == 'rollback'
         run: |
-          gcloud compute ssh ${{ secrets.VM_NAME }} \
-            --zone=${{ secrets.VM_ZONE }} \
-            --project=${{ secrets.GCP_PROJECT }} \
-            --command='
-              PODS=$(sudo KUBECONFIG=/etc/rancher/k3s/k3s.yaml kubectl get pods -n workshop -l app=payment-service -o jsonpath='"'"'{.items[*].status.podIP}'"'"')
-              for IP in $PODS; do
-                echo "Rolling back failure rate on $IP..."
-                wget -q -O- --post-data='"'"'{"rate":0}'"'"' --header='"'"'Content-Type: application/json'"'"' "http://$IP:3002/admin/failure-rate"
-                echo ""
-              done
-            '
+          curl -X POST \
+            -H "Content-Type: application/json" \
+            -d '{"rate":0}' \
+            "https://workshop.${{ env.WORKSHOP_IP }}.nip.io/admin/failure-rate"
 
       - name: Send Dynatrace deployment event
         if: always()
         run: |
-          if [ "${{ inputs.action }}" = "deploy-bad-release" ]; then
-            DESCRIPTION="Bad release deployed: payment-service FAILURE_RATE=${{ inputs.failure_rate }}"
-            VERSION="bad-release-${{ github.run_number }}"
-          else
-            DESCRIPTION="Rollback: payment-service restored to healthy state"
-            VERSION="rollback-${{ github.run_number }}"
-          fi
-
-          curl -sS -X POST "${DT_ENV_URL%/}/api/v2/events/ingest" \
-            -H "Authorization: Api-Token ${DT_API_TOKEN}" \
+          curl -X POST \
+            -H "Authorization: Api-Token ${{ env.DT_API_TOKEN }}" \
             -H "Content-Type: application/json" \
-            -d "{
-              \"eventType\": \"CUSTOM_DEPLOYMENT\",
-              \"title\": \"Workshop: ${DESCRIPTION}\",
-              \"properties\": {
-                \"dt.event.description\": \"${DESCRIPTION}\",
-                \"dt.event.deployment.project\": \"workshop-demo\",
-                \"dt.event.deployment.version\": \"${VERSION}\",
-                \"dt.event.deployment.release_stage\": \"production\",
-                \"ci.link\": \"${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}\"
-              }
-            }"
+            "${{ env.DT_ENV_URL }}/api/v2/events/ingest" \
+            -d @- << 'EOF'
+          {
+            "eventType": "CUSTOM_DEPLOYMENT",
+            "title": "Payment Service ${{ inputs.action }}",
+            "description": "Action: ${{ inputs.action }}, Failure Rate: ${{ inputs.failure_rate }}",
+            "entitySelector": "type(\"SERVICE\",\"name(\"payment-service\")",
+            "properties": {
+              "git.repository": "${{ github.repository }}",
+              "git.commit": "${{ github.sha }}",
+              "deployment.url": "${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}"
+            }
+          }
+          EOF
