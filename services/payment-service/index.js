@@ -4,7 +4,7 @@ const http = require("http");
 const app = express();
 const PORT = process.env.PORT || 3002;
 const NOTIFICATION_SERVICE = process.env.NOTIFICATION_SERVICE_URL || "http://notification-service.workshop.svc.cluster.local:3004";
-const FAILURE_RATE = parseFloat(process.env.FAILURE_RATE || "0");
+let failureRate = parseFloat(process.env.FAILURE_RATE || "0");
 
 function fetch(url) {
   return new Promise((resolve, reject) => {
@@ -26,16 +26,28 @@ function simulateFailureLatency() {
   return new Promise((resolve) => setTimeout(resolve, delay));
 }
 
+app.use(express.json());
+
 app.get("/health", (req, res) => {
-  res.json({ service: "payment-service", status: "ok", failureRate: FAILURE_RATE });
+  res.json({ service: "payment-service", status: "ok", failureRate });
+});
+
+app.post("/admin/failure-rate", (req, res) => {
+  const { rate } = req.body;
+  if (typeof rate !== "number" || rate < 0 || rate > 1) {
+    return res.status(400).json({ error: "rate must be a number between 0.0 and 1.0" });
+  }
+  failureRate = rate;
+  console.log(JSON.stringify({ service: "payment-service", event: "failure-rate-changed", failureRate }));
+  res.json({ failureRate });
 });
 
 app.get("/pay", async (req, res) => {
   const start = Date.now();
   const { orderId, amount } = req.query;
 
-  // Simulate failure based on FAILURE_RATE
-  if (Math.random() < FAILURE_RATE) {
+  // Simulate failure based on failureRate
+  if (Math.random() < failureRate) {
     await simulateFailureLatency();
     const duration = Date.now() - start;
     console.log(JSON.stringify({ service: "payment-service", path: "/pay", orderId, status: 500, error: "payment processing failed", duration }));
@@ -56,4 +68,4 @@ app.get("/pay", async (req, res) => {
   res.json({ orderId, amount, paymentStatus: "confirmed", transactionId: `TXN-${Date.now()}` });
 });
 
-app.listen(PORT, () => console.log(`payment-service listening on :${PORT} (FAILURE_RATE=${FAILURE_RATE})`));
+app.listen(PORT, () => console.log(`payment-service listening on :${PORT} (failureRate=${failureRate})`));

@@ -38,7 +38,14 @@ jobs:
           gcloud compute ssh ${{ secrets.VM_NAME }} \
             --zone=${{ secrets.VM_ZONE }} \
             --project=${{ secrets.GCP_PROJECT }} \
-            --command="sudo KUBECONFIG=/etc/rancher/k3s/k3s.yaml kubectl set env deployment/payment-service -n workshop FAILURE_RATE=${{ inputs.failure_rate }}"
+            --command='
+              PODS=$(sudo KUBECONFIG=/etc/rancher/k3s/k3s.yaml kubectl get pods -n workshop -l app=payment-service -o jsonpath='"'"'{.items[*].status.podIP}'"'"')
+              for IP in $PODS; do
+                echo "Setting failure rate on $IP..."
+                wget -q -O- --post-data='"'"'{"rate":${{ inputs.failure_rate }}}'"'"' --header='"'"'Content-Type: application/json'"'"' "http://$IP:3002/admin/failure-rate"
+                echo ""
+              done
+            '
 
       - name: Rollback via SSH
         if: inputs.action == 'rollback'
@@ -46,7 +53,14 @@ jobs:
           gcloud compute ssh ${{ secrets.VM_NAME }} \
             --zone=${{ secrets.VM_ZONE }} \
             --project=${{ secrets.GCP_PROJECT }} \
-            --command="sudo KUBECONFIG=/etc/rancher/k3s/k3s.yaml kubectl set env deployment/payment-service -n workshop FAILURE_RATE=0"
+            --command='
+              PODS=$(sudo KUBECONFIG=/etc/rancher/k3s/k3s.yaml kubectl get pods -n workshop -l app=payment-service -o jsonpath='"'"'{.items[*].status.podIP}'"'"')
+              for IP in $PODS; do
+                echo "Rolling back failure rate on $IP..."
+                wget -q -O- --post-data='"'"'{"rate":0}'"'"' --header='"'"'Content-Type: application/json'"'"' "http://$IP:3002/admin/failure-rate"
+                echo ""
+              done
+            '
 
       - name: Send Dynatrace deployment event
         if: always()

@@ -3,26 +3,26 @@
 # Usage: ./scripts/deploy-bad-release.sh [FAILURE_RATE]
 #
 # This simulates a faulty deployment that Dynatrace should detect.
+# Changes the failure rate instantly via API — no pod restarts.
 
 set -euo pipefail
 
 FAILURE_RATE="${1:-0.7}"
 NAMESPACE="workshop"
-DEPLOYMENT="payment-service"
 
 export KUBECONFIG="${KUBECONFIG:-/etc/rancher/k3s/k3s.yaml}"
 
 echo "=== Deploying bad release ==="
-echo "  Target:       ${DEPLOYMENT} in namespace ${NAMESPACE}"
 echo "  Failure rate:  ${FAILURE_RATE} (${FAILURE_RATE}00% of requests will fail)"
 echo ""
 
-# Set the FAILURE_RATE env var on the deployment — triggers a rolling update
-kubectl set env "deployment/${DEPLOYMENT}" -n "${NAMESPACE}" "FAILURE_RATE=${FAILURE_RATE}"
+PODS=$(kubectl get pods -n "${NAMESPACE}" -l app=payment-service -o jsonpath='{.items[*].status.podIP}')
 
-# Wait for rollout
-echo ">>> Waiting for rollout..."
-kubectl rollout status "deployment/${DEPLOYMENT}" -n "${NAMESPACE}" --timeout=120s
+for IP in $PODS; do
+  echo ">>> Setting failure rate on pod ${IP}..."
+  wget -q -O- --post-data="{\"rate\":${FAILURE_RATE}}" --header='Content-Type: application/json' "http://${IP}:3002/admin/failure-rate"
+  echo ""
+done
 
 echo ""
 echo "=== Bad release deployed! ==="
