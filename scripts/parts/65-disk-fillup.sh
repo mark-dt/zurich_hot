@@ -7,7 +7,7 @@ NAMESPACE="workshop"
 KUBECONFIG_PATH="/etc/rancher/k3s/k3s.yaml"
 IMG_PATH="/opt/disk-fillup.img"
 MNT_PATH="/mnt/disk-fillup"
-IMG_SIZE_MB=1024  # 1Gi
+IMG_SIZE_MB=4096  # 4Gi
 
 log() { echo "[disk-fillup] $*" | tee -a /var/log/startup-parts.log; }
 
@@ -59,7 +59,7 @@ metadata:
   name: disk-fillup-pv
 spec:
   capacity:
-    storage: 1Gi
+    storage: 4Gi
   accessModes:
     - ReadWriteOnce
   persistentVolumeReclaimPolicy: Retain
@@ -85,7 +85,7 @@ spec:
   storageClassName: disk-fillup
   resources:
     requests:
-      storage: 1Gi
+      storage: 4Gi
 __DISK_FILLUP_PVC__
 
 # Deployment: busybox writing ~17KB/s to the PVC (fills 1Gi in ~1 hour)
@@ -114,7 +114,7 @@ spec:
             - -c
             - |
               while true; do
-                dd if=/dev/urandom bs=17000 count=1 >> /data/fill.bin 2>/dev/null
+                dd if=/dev/urandom bs=119000 count=1 >> /data/fill.bin 2>/dev/null
                 sleep 1
               done
           volumeMounts:
