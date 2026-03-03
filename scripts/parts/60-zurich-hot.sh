@@ -56,7 +56,8 @@ sudo k3s kubectl --kubeconfig "${KUBECONFIG_PATH}" get ns "${NAMESPACE}" >/dev/n
 
 log "Applying Kubernetes manifests..."
 for manifest in "${WORKDIR}"/k8s/*.yaml; do
-  sudo k3s kubectl --kubeconfig "${KUBECONFIG_PATH}" apply -f "${manifest}"
+  sudo k3s kubectl --kubeconfig "${KUBECONFIG_PATH}" apply -f "${manifest}" || \
+    log "WARNING: Failed to apply ${manifest}, continuing..."
 done
 
 # Images are built locally and imported into k3s containerd, not in a registry.
