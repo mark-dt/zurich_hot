@@ -59,3 +59,16 @@ spec:
     - port: 3002
       targetPort: 3002
   type: ClusterIP
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: payment-service-headless
+  namespace: workshop
+spec:
+  clusterIP: None
+  selector:
+    app: payment-service
+  ports:
+    - port: 3002
+      targetPort: 3002
