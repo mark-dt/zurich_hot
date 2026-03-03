@@ -39,14 +39,14 @@ git clone --depth 1 --branch "${REPO_BRANCH}" "${REPO_URL}" "${WORKDIR}"
 # --- Build Docker images ---
 log "Building Docker images..."
 for svc in ${SERVICES}; do
-  log "  Building workshop/${svc}:latest ..."
-  docker build -t "workshop/${svc}:latest" "${WORKDIR}/services/${svc}/"
+  log "  Building workshop/${svc}:local ..."
+  docker build -t "workshop/${svc}:local" "${WORKDIR}/services/${svc}/"
 done
 
 # --- Import images into k3s containerd ---
 log "Importing images into k3s containerd..."
 for svc in ${SERVICES}; do
-  docker save "workshop/${svc}:latest" | sudo k3s ctr images import -
+  docker save "workshop/${svc}:local" | sudo k3s ctr images import -
 done
 
 # --- Deploy to Kubernetes ---
@@ -60,12 +60,12 @@ for manifest in "${WORKDIR}"/k8s/*.yaml; do
 done
 
 # Images are built locally and imported into k3s containerd, not in a registry.
-# Patch deployments to use imagePullPolicy: Never, which triggers a new rollout.
-log "Patching deployments to use imagePullPolicy: Never..."
+# Patch deployments to use the local image tag and imagePullPolicy: Never.
+log "Patching deployments to use local images with imagePullPolicy: Never..."
 for svc in ${SERVICES}; do
   sudo k3s kubectl --kubeconfig "${KUBECONFIG_PATH}" -n "${NAMESPACE}" patch deploy "${svc}" \
     --type='json' \
-    -p='[{"op":"add","path":"/spec/template/spec/containers/0/imagePullPolicy","value":"Never"}]' || true
+    -p="[{\"op\":\"replace\",\"path\":\"/spec/template/spec/containers/0/image\",\"value\":\"workshop/${svc}:local\"},{\"op\":\"add\",\"path\":\"/spec/template/spec/containers/0/imagePullPolicy\",\"value\":\"Never\"}]" || true
 done
 
 # --- Wait for pods ---

@@ -109,6 +109,7 @@ spec:
     - group: apps
       kind: Deployment
       jsonPointers:
+        - /spec/template/spec/containers/0/image
         - /spec/template/spec/containers/0/imagePullPolicy
 ARGO_APP_EOF
 
@@ -124,13 +125,13 @@ for i in {1..60}; do
   sleep 5
 done
 
-# Re-patch imagePullPolicy after ArgoCD sync (ArgoCD ignores the diff but the initial sync may reset it)
-log "Re-patching imagePullPolicy: Never on workshop deployments..."
+# Re-patch image tag and imagePullPolicy after ArgoCD sync (ArgoCD ignores the diff but the initial sync may reset it)
+log "Re-patching workshop deployments to use local images with imagePullPolicy: Never..."
 SERVICES="frontend order-service payment-service inventory-service notification-service"
 for svc in $${SERVICES}; do
   k3s kubectl --kubeconfig "$${KUBECONFIG_PATH}" -n "$${WORKSHOP_NS}" patch deploy "$${svc}" \
     --type='json' \
-    -p='[{"op":"add","path":"/spec/template/spec/containers/0/imagePullPolicy","value":"Never"}]' 2>/dev/null || true
+    -p="[{\"op\":\"replace\",\"path\":\"/spec/template/spec/containers/0/image\",\"value\":\"workshop/$${svc}:local\"},{\"op\":\"add\",\"path\":\"/spec/template/spec/containers/0/imagePullPolicy\",\"value\":\"Never\"}]" 2>/dev/null || true
 done
 
 log "ArgoCD workshop app setup complete."
