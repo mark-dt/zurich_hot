@@ -35,6 +35,22 @@ chmod 777 "${MNT_PATH}"
 
 log "Loop volume mounted: $(df -h "${MNT_PATH}" | tail -1)"
 
+# --- Clean up any stale PVC bound to the wrong volume (e.g. local-path from a previous run) ---
+CURRENT_SC="$(sudo k3s kubectl --kubeconfig "${KUBECONFIG_PATH}" -n "${NAMESPACE}" \
+  get pvc disk-fillup -o jsonpath='{.spec.storageClassName}' 2>/dev/null || true)"
+if [[ -n "${CURRENT_SC}" && "${CURRENT_SC}" != "disk-fillup" ]]; then
+  log "Removing stale PVC (storageClass=${CURRENT_SC}), will recreate with disk-fillup class..."
+  sudo k3s kubectl --kubeconfig "${KUBECONFIG_PATH}" -n "${NAMESPACE}" delete deploy disk-fillup --ignore-not-found 2>/dev/null || true
+  sudo k3s kubectl --kubeconfig "${KUBECONFIG_PATH}" -n "${NAMESPACE}" delete pvc disk-fillup 2>/dev/null || true
+  # Wait for PVC to be fully removed
+  for i in {1..30}; do
+    if ! sudo k3s kubectl --kubeconfig "${KUBECONFIG_PATH}" -n "${NAMESPACE}" get pvc disk-fillup >/dev/null 2>&1; then
+      break
+    fi
+    sleep 2
+  done
+fi
+
 # --- Create a PV backed by the loop mount, PVC, and Deployment ---
 sudo k3s kubectl --kubeconfig "${KUBECONFIG_PATH}" apply -f - <<__DISK_FILLUP_PV__
 apiVersion: v1
