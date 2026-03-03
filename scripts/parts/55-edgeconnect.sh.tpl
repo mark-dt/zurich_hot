@@ -51,7 +51,7 @@ metadata:
   name: $${EC_NAME}
   namespace: $${NS}
 spec:
-  apiServer: https://ggg43721.sprint.dynatracelabs.com
+  apiServer: ggg43721.sprint.dynatracelabs.com
   oauth:
     clientSecret: $${SECRET_NAME}
     endpoint: $${OAUTH_ENDPOINT}
