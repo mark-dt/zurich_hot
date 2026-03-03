@@ -46,21 +46,24 @@ jobs:
 
       - name: Send Dynatrace deployment event
         if: always()
+        env:
+          K8_CLUSTER: ${{ secrets.K8_CLUSTER }}
         run: |
           curl -X POST \
             -H "Authorization: Api-Token ${{ env.DT_API_TOKEN }}" \
             -H "Content-Type: application/json" \
             "${{ env.DT_ENV_URL }}/api/v2/events/ingest" \
-            -d @- << 'EOF'
+            -d @- <<'EOF'
           {
             "eventType": "CUSTOM_DEPLOYMENT",
             "title": "Payment Service ${{ inputs.action }}",
             "description": "Action: ${{ inputs.action }}, Failure Rate: ${{ inputs.failure_rate }}",
-            "entitySelector": "type(\"SERVICE\",\"name(\"payment-service\")",
+            "entitySelector": "type(\"SERVICE\"),entityName.equals(\"payment-service\"),tag(\"environment:${K8_CLUSTER}\")",
             "properties": {
               "git.repository": "${{ github.repository }}",
               "git.commit": "${{ github.sha }}",
-              "deployment.url": "${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}"
+              "deployment.url": "${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}",
+              "environment": "${K8_CLUSTER}"
             }
           }
           EOF
