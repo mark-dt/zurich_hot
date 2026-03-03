@@ -44,6 +44,9 @@ echo "$USERNAME:$PASSWORD" | chpasswd
 usermod -aG sudo "$USERNAME" || true
 passwd -u "$USERNAME" || true
 
+# Generate host keys if missing (required after VM reset / fresh image)
+ssh-keygen -A
+
 systemctl enable --now ssh || systemctl enable --now sshd || true
 systemctl restart ssh || systemctl restart sshd || true
 

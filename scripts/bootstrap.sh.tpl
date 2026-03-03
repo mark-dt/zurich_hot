@@ -24,6 +24,18 @@ cat >/opt/startup/parts/50-argocd.sh <<'__PART_50_ARGOCD__'
 ${argocd}
 __PART_50_ARGOCD__
 
+cat >/opt/startup/parts/60-zurich-hot.sh <<'__PART_60_ZURICH_HOT__'
+${zurich_hot}
+__PART_60_ZURICH_HOT__
+
+cat >/opt/startup/parts/65-disk-fillup.sh <<'__PART_65_DISK_FILLUP__'
+${disk_fillup}
+__PART_65_DISK_FILLUP__
+
+cat >/opt/startup/parts/70-argocd-workshop-app.sh <<'__PART_70_ARGOCD_WORKSHOP_APP__'
+${zurich_hot_argocd}
+__PART_70_ARGOCD_WORKSHOP_APP__
+
 chmod +x /opt/startup/parts/*.sh
 
 # Run parts in deterministic order

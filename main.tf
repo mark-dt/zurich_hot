@@ -63,6 +63,11 @@ resource "google_compute_instance" "vm" {
       easytrade = file("${path.module}/scripts/parts/30-easytrade.sh")
       easytrade_ingress = file("${path.module}/scripts/parts/40-easytrade-ingress.sh")
       argocd = file("${path.module}/scripts/parts/50-argocd.sh")
+      zurich_hot = file("${path.module}/scripts/parts/60-zurich-hot.sh")
+      disk_fillup = file("${path.module}/scripts/parts/65-disk-fillup.sh")
+      zurich_hot_argocd = templatefile("${path.module}/scripts/parts/70-argocd-workshop-app.sh.tpl", {
+        dynatrace_api_token = var.dynatrace_api_token
+      })
     })
   }
 

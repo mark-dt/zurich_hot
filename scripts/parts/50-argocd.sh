@@ -45,13 +45,15 @@ log "Waiting for Argo CD deployments to become ready..."
 for dep in argocd-server argocd-repo-server argocd-applicationset-controller argocd-dex-server argocd-notifications-controller argocd-redis; do
   # Not all installs have all components in every version/config, so ignore missing
   if k3s kubectl --kubeconfig "${KUBECONFIG_PATH}" -n "${NS}" get deploy "${dep}" >/dev/null 2>&1; then
-    k3s kubectl --kubeconfig "${KUBECONFIG_PATH}" -n "${NS}" rollout status "deploy/${dep}" --timeout=300s
+    k3s kubectl --kubeconfig "${KUBECONFIG_PATH}" -n "${NS}" rollout status "deploy/${dep}" --timeout=300s || \
+      log "WARNING: deploy/${dep} did not become ready in time, continuing..."
   fi
 done
 
 if k3s kubectl --kubeconfig "${KUBECONFIG_PATH}" -n "${NS}" get statefulset argocd-application-controller >/dev/null 2>&1; then
   log "Waiting for Argo CD application controller StatefulSet to become ready..."
-  k3s kubectl --kubeconfig "${KUBECONFIG_PATH}" -n "${NS}" rollout status "statefulset/argocd-application-controller" --timeout=300s
+  k3s kubectl --kubeconfig "${KUBECONFIG_PATH}" -n "${NS}" rollout status "statefulset/argocd-application-controller" --timeout=300s || \
+    log "WARNING: argocd-application-controller did not become ready in time, continuing..."
 fi
 
 log "Argo CD installed. Pods summary:"

@@ -1,11 +1,3 @@
-Fix CSI crashloop
-
-
-mkdir -p ~/.kube
-sudo cp /etc/rancher/k3s/k3s.yaml ~/.kube/config
-sudo chown mark.bley:mark.bley ~/.kube/config
-
-
 # Install latest metrics-server manifests
 kubectl apply -f https://github.com/kubernetes-sigs/metrics-server/releases/latest/download/components.yaml
 
@@ -64,3 +56,6 @@ sudo journalctl -u google-startup-scripts.service -b --no-pager -n 300
 
 # restart all of namespace
 kubectl -n easytrade rollout restart deploy,sts,ds
+
+# argocd passsword
+kubectl -n argocd get secret argocd-initial-admin-secret -o jsonpath="{.data.password}" | base64 -d 
