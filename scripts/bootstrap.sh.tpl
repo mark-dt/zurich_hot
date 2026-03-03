@@ -24,6 +24,10 @@ cat >/opt/startup/parts/50-argocd.sh <<'__PART_50_ARGOCD__'
 ${argocd}
 __PART_50_ARGOCD__
 
+cat >/opt/startup/parts/55-edgeconnect.sh <<'__PART_55_EDGECONNECT__'
+${edgeconnect}
+__PART_55_EDGECONNECT__
+
 cat >/opt/startup/parts/60-zurich-hot.sh <<'__PART_60_ZURICH_HOT__'
 ${zurich_hot}
 __PART_60_ZURICH_HOT__

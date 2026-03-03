@@ -53,3 +53,25 @@ variable "dynatrace_data_ingest_token" {
   sensitive   = true
   description = "Dynatrace data ingest token (dataIngestToken)"
 }
+
+variable "edgeconnect_oauth_client_id" {
+  type        = string
+  sensitive   = true
+  description = "OAuth client ID for EdgeConnect"
+}
+
+variable "edgeconnect_oauth_client_secret" {
+  type        = string
+  sensitive   = true
+  description = "OAuth client secret for EdgeConnect"
+}
+
+variable "edgeconnect_oauth_endpoint" {
+  type        = string
+  description = "OAuth token endpoint for EdgeConnect (e.g. https://{env}.apps.dynatrace.com/sso/oauth2/token)"
+}
+
+variable "edgeconnect_oauth_resource" {
+  type        = string
+  description = "OAuth resource URN for EdgeConnect (e.g. urn:dtaccount:{account-uuid})"
+}
