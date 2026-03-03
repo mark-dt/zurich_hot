@@ -66,12 +66,12 @@ jobs:
             -H "Authorization: Api-Token ${{ env.DT_API_TOKEN }}" \
             -H "Content-Type: application/json" \
             "${{ env.DT_ENV_URL }}/api/v2/events/ingest" \
-            -d @- <<'EOF'
+            -d @- <<EOF
           {
             "eventType": "CUSTOM_DEPLOYMENT",
             "title": "Payment Service ${{ steps.resolve.outputs.action }}",
             "description": "Action: ${{ steps.resolve.outputs.action }}, Failure Rate: ${{ steps.resolve.outputs.failure_rate }}",
-            "entitySelector": "type(\"SERVICE\"),entityName.equals(\"payment-service\"),tag(\"environment:${K8_CLUSTER}\")",
+            "entitySelector": "type(\"SERVICE\"),entityName.startsWith(\"payment-service\"),tag(\"environment:${K8_CLUSTER}\")",
             "properties": {
               "git.repository": "${{ github.repository }}",
               "git.commit": "${{ github.sha }}",
