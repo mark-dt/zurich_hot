@@ -1,0 +1,76 @@
+{
+  "_comment": "Dynatrace Workflow — import via Automations > Workflows > Upload. Requires: (1) GitHub for Workflows app installed and connected, (2) Email notification connection configured.",
+  "title": "Notify: Payment Service Issue Detection",
+  "description": "When a Davis problem is detected on payment-service, creates a GitHub issue and sends an email notification.",
+  "trigger": {
+    "eventTrigger": {
+      "triggerConfiguration": {
+        "type": "davis-problem",
+        "value": {
+          "categories": {
+            "error": true
+          },
+          "entityTags": {
+            "app": ["workshop"]
+          }
+        }
+      }
+    }
+  },
+  "tasks": {
+    "extract_problem_details": {
+      "name": "extract_problem_details",
+      "action": "dynatrace.automations:run-javascript",
+      "description": "Extract problem details from the Davis event for use in downstream tasks",
+      "input": {
+        "script": "export default async function ({ execution_id }) {\n  const ex = await fetch(`/platform/automation/v1/executions/${execution_id}`);\n  const data = await ex.json();\n  const event = data.params?.event || {};\n  const problemTitle = event['event.name'] || 'Unknown problem';\n  const problemId = event['event.id'] || 'N/A';\n  const status = event['event.status'] || 'OPEN';\n  const affectedEntities = (event['affected_entity_ids'] || []).join(', ') || 'N/A';\n  const rootCause = event['root_cause_entity_name'] || 'Unknown';\n  const startTime = event['event.start'] || new Date().toISOString();\n  const dtUrl = event['dt.davis.mute_url']?.replace('/mute', '') || '';\n\n  return {\n    problemTitle,\n    problemId,\n    status,\n    affectedEntities,\n    rootCause,\n    startTime,\n    dtUrl\n  };\n}"
+      },
+      "position": {
+        "x": 0,
+        "y": 1
+      }
+    },
+    "create_github_issue": {
+      "name": "create_github_issue",
+      "action": "dynatrace.github:create-issue",
+      "description": "Create a GitHub issue documenting the detected problem",
+      "input": {
+        "owner": "mark-dt",
+        "repo": "zurich_hot",
+        "title": "[Dynatrace] {{ result('extract_problem_details').problemTitle }}",
+        "body": "## Dynatrace Problem Detected\n\n| Field | Value |\n|-------|-------|\n| **Problem** | {{ result('extract_problem_details').problemTitle }} |\n| **Problem ID** | {{ result('extract_problem_details').problemId }} |\n| **Status** | {{ result('extract_problem_details').status }} |\n| **Root Cause** | {{ result('extract_problem_details').rootCause }} |\n| **Affected Entities** | {{ result('extract_problem_details').affectedEntities }} |\n| **Start Time** | {{ result('extract_problem_details').startTime }} |\n\n### Auto-Remediation\nA rollback workflow has been triggered automatically via the [Auto-Remediation workflow](https://github.com/mark-dt/zurich_hot/actions/workflows/workshop-deploy-bad-release.yaml).\n\n---\n_Created automatically by Dynatrace Workflow_",
+        "labels": ["bug", "dynatrace", "auto-detected"]
+      },
+      "predecessors": ["extract_problem_details"],
+      "conditions": {
+        "states": {
+          "extract_problem_details": "OK"
+        }
+      },
+      "position": {
+        "x": -1,
+        "y": 2
+      }
+    },
+    "send_email_notification": {
+      "name": "send_email_notification",
+      "action": "dynatrace.email:send-email",
+      "description": "Send email notification about the detected problem",
+      "input": {
+        "to": "{{ env.NOTIFICATION_EMAIL }}",
+        "subject": "[Dynatrace Alert] Payment Service: {{ result('extract_problem_details').problemTitle }}",
+        "body": "<h2>Dynatrace Problem Detected</h2><table style=\"border-collapse:collapse;width:100%\"><tr><td style=\"padding:8px;border:1px solid #ddd\"><strong>Problem</strong></td><td style=\"padding:8px;border:1px solid #ddd\">{{ result('extract_problem_details').problemTitle }}</td></tr><tr><td style=\"padding:8px;border:1px solid #ddd\"><strong>Problem ID</strong></td><td style=\"padding:8px;border:1px solid #ddd\">{{ result('extract_problem_details').problemId }}</td></tr><tr><td style=\"padding:8px;border:1px solid #ddd\"><strong>Status</strong></td><td style=\"padding:8px;border:1px solid #ddd\">{{ result('extract_problem_details').status }}</td></tr><tr><td style=\"padding:8px;border:1px solid #ddd\"><strong>Root Cause</strong></td><td style=\"padding:8px;border:1px solid #ddd\">{{ result('extract_problem_details').rootCause }}</td></tr><tr><td style=\"padding:8px;border:1px solid #ddd\"><strong>Affected Entities</strong></td><td style=\"padding:8px;border:1px solid #ddd\">{{ result('extract_problem_details').affectedEntities }}</td></tr><tr><td style=\"padding:8px;border:1px solid #ddd\"><strong>Start Time</strong></td><td style=\"padding:8px;border:1px solid #ddd\">{{ result('extract_problem_details').startTime }}</td></tr></table><br><p>An auto-remediation rollback has been triggered automatically.</p><p><em>Sent by Dynatrace Workflow</em></p>"
+      },
+      "predecessors": ["extract_problem_details"],
+      "conditions": {
+        "states": {
+          "extract_problem_details": "OK"
+        }
+      },
+      "position": {
+        "x": 1,
+        "y": 2
+      }
+    }
+  }
+}
