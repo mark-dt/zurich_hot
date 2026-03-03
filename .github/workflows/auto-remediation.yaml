@@ -44,22 +44,28 @@ jobs:
           echo ">>> Feature flag '${FF_KEY}' disabled successfully"
 
       - name: Send Dynatrace remediation event
+        if: always()
+        env:
+          K8_CLUSTER: ${{ secrets.K8_CLUSTER }}
         run: |
           FF_KEY="${{ steps.payload.outputs.ff_key }}"
           curl -sS -X POST "${DT_ENV_URL%/}/api/v2/events/ingest" \
             -H "Authorization: Api-Token ${DT_API_TOKEN}" \
             -H "Content-Type: application/json" \
-            -d "{
-              \"eventType\": \"CUSTOM_DEPLOYMENT\",
-              \"title\": \"Auto-Remediation: disabled '${FF_KEY}'\",
-              \"properties\": {
-                \"dt.event.description\": \"Dynatrace auto-remediation triggered. Feature flag '${FF_KEY}' has been disabled to restore service health.\",
-                \"dt.event.deployment.project\": \"easytrade\",
-                \"dt.event.deployment.version\": \"remediation-${FF_KEY}-${{ github.run_number }}\",
-                \"dt.event.deployment.release_stage\": \"production\",
-                \"dt.event.deployment.ci_back_link\": \"${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}\",
-                \"remediation.trigger\": \"dynatrace-workflow\",
-                \"featureFlag\": \"${FF_KEY}\",
-                \"flagEnabled\": \"false\"
-              }
-            }"
+            -d @- <<EOF
+          {
+            "eventType": "CUSTOM_DEPLOYMENT",
+            "title": "Auto-Remediation: disabled '${FF_KEY}'",
+            "description": "Dynatrace auto-remediation triggered. Feature flag '${FF_KEY}' has been disabled to restore service health.",
+            "entitySelector": "type(\"SERVICE\"),tag(\"environment:${K8_CLUSTER}\")",
+            "properties": {
+              "git.repository": "${{ github.repository }}",
+              "git.commit": "${{ github.sha }}",
+              "deployment.url": "${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}",
+              "environment": "${K8_CLUSTER}",
+              "remediation.trigger": "dynatrace-workflow",
+              "featureFlag": "${FF_KEY}",
+              "flagEnabled": "false"
+            }
+          }
+          EOF
