@@ -14,6 +14,8 @@ on:
         description: "Failure rate (0.0-1.0), only used for deploy-bad-release"
         required: false
         default: "0.7"
+  repository_dispatch:
+    types: [auto-remediate]
 
 env:
   DT_ENV_URL: ${{ secrets.DT_ENV_URL }}
@@ -25,19 +27,30 @@ jobs:
     runs-on: ubuntu-latest
 
     steps:
+      - name: Resolve action
+        id: resolve
+        run: |
+          if [ "${{ github.event_name }}" = "repository_dispatch" ]; then
+            echo "action=rollback" >> "$GITHUB_OUTPUT"
+            echo "failure_rate=0" >> "$GITHUB_OUTPUT"
+          else
+            echo "action=${{ inputs.action }}" >> "$GITHUB_OUTPUT"
+            echo "failure_rate=${{ inputs.failure_rate }}" >> "$GITHUB_OUTPUT"
+          fi
+
       - name: Checkout code
         uses: actions/checkout@v4
 
       - name: Deploy bad release via HTTP
-        if: inputs.action == 'deploy-bad-release'
+        if: steps.resolve.outputs.action == 'deploy-bad-release'
         run: |
           curl -X POST \
             -H "Content-Type: application/json" \
-            -d '{"rate":${{ inputs.failure_rate }}}' \
+            -d '{"rate":${{ steps.resolve.outputs.failure_rate }}}' \
             "https://workshop.${{ env.WORKSHOP_IP }}.nip.io/admin/failure-rate"
 
       - name: Rollback via HTTP
-        if: inputs.action == 'rollback'
+        if: steps.resolve.outputs.action == 'rollback'
         run: |
           curl -X POST \
             -H "Content-Type: application/json" \
@@ -56,8 +69,8 @@ jobs:
             -d @- <<'EOF'
           {
             "eventType": "CUSTOM_DEPLOYMENT",
-            "title": "Payment Service ${{ inputs.action }}",
-            "description": "Action: ${{ inputs.action }}, Failure Rate: ${{ inputs.failure_rate }}",
+            "title": "Payment Service ${{ steps.resolve.outputs.action }}",
+            "description": "Action: ${{ steps.resolve.outputs.action }}, Failure Rate: ${{ steps.resolve.outputs.failure_rate }}",
             "entitySelector": "type(\"SERVICE\"),entityName.equals(\"payment-service\"),tag(\"environment:${K8_CLUSTER}\")",
             "properties": {
               "git.repository": "${{ github.repository }}",
