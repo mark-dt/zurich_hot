@@ -1,3 +1,3 @@
 hostname
 uptime
-kubectl -n easytrade rollout restart deploy,sts,ds
+kubectl -n dynatrace get edgeconnect

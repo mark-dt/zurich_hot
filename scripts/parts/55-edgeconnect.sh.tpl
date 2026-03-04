@@ -5,8 +5,8 @@ exec > >(tee -a /var/log/startup-parts.log) 2>&1
 
 KUBECONFIG_PATH="/etc/rancher/k3s/k3s.yaml"
 NS="dynatrace"
-EC_NAME="edgeconnect"
-SECRET_NAME="edgeconnect-oauth"
+EC_NAME="edgeconnect-$${HOSTNAME}"
+SECRET_NAME="edgeconnect-$${HOSTNAME}-oauth"
 
 OAUTH_CLIENT_ID="${edgeconnect_oauth_client_id}"
 OAUTH_CLIENT_SECRET="${edgeconnect_oauth_client_secret}"
@@ -35,23 +35,30 @@ for i in {1..60}; do
   sleep 5
 done
 
-# Create OAuth client secret (idempotent)
+# Create OAuth client secret (idempotent via stringData)
 log "Creating OAuth secret: $${SECRET_NAME}"
-k3s kubectl --kubeconfig "$${KUBECONFIG_PATH}" -n "$${NS}" create secret generic "$${SECRET_NAME}" \
-  --from-literal="oauth-client-id=$${OAUTH_CLIENT_ID}" \
-  --from-literal="oauth-client-secret=$${OAUTH_CLIENT_SECRET}" \
-  --dry-run=client -o yaml | k3s kubectl --kubeconfig "$${KUBECONFIG_PATH}" apply -f -
+k3s kubectl --kubeconfig "$${KUBECONFIG_PATH}" apply -f - <<SECRET_EOF
+apiVersion: v1
+kind: Secret
+metadata:
+  name: $${SECRET_NAME}
+  namespace: $${NS}
+stringData:
+  oauth-client-id: $${OAUTH_CLIENT_ID}
+  oauth-client-secret: $${OAUTH_CLIENT_SECRET}
+SECRET_EOF
 
 # Create EdgeConnect CR
 log "Creating EdgeConnect CR: $${EC_NAME}"
 k3s kubectl --kubeconfig "$${KUBECONFIG_PATH}" apply -f - <<EC_EOF
-apiVersion: dynatrace.com/v1alpha2
+apiVersion: dynatrace.com/v1alpha1
 kind: EdgeConnect
 metadata:
   name: $${EC_NAME}
   namespace: $${NS}
 spec:
-  apiServer: ggg43721.sprint.dynatracelabs.com
+  apiServer: ggg43721.sprint.apps.dynatracelabs.com
+  replicas: 1
   oauth:
     clientSecret: $${SECRET_NAME}
     endpoint: $${OAUTH_ENDPOINT}

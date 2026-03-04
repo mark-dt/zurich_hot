@@ -131,7 +131,9 @@ echo "Startup complete. User=$USERNAME"
 #--atomic
 
 helm --kubeconfig /etc/rancher/k3s/k3s.yaml -n dynatrace upgrade --install dynatrace-operator \
-  oci://public.ecr.aws/dynatrace/dynatrace-operator \
+  oci://docker.io/dynatrace/dynatrace-operator \
+  --set "installCRD=true" \
+  --set "csidriver.enabled=true" \
   --create-namespace \
   --atomic
 

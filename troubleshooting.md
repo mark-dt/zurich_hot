@@ -51,7 +51,7 @@ gcloud compute instances describe simple-vm-1 \
   --format="get(metadata.items)"
 
 
-sudo journalctl -u google-startup-scripts.service -b --no-pager -n 300
+sudo journalctl -u google-startup-scripts.service -b --no-pager -n 301
 
 
 # restart all of namespace
@@ -59,3 +59,7 @@ kubectl -n easytrade rollout restart deploy,sts,ds
 
 # argocd passsword
 kubectl -n argocd get secret argocd-initial-admin-secret -o jsonpath="{.data.password}" | base64 -d 
+
+
+# Workshop local execution - EdgeConnect/Livedebugger 
+curl "http://$(kubectl -n workshop get svc payment-service -o jsonpath='{.spec.clusterIP}'):3002/pay?orderId=MY-ORDER-42&amount=99.99"

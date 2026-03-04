@@ -88,7 +88,7 @@ spec:
       storage: 4Gi
 __DISK_FILLUP_PVC__
 
-# Deployment: busybox writing ~17KB/s to the PVC (fills 1Gi in ~1 hour)
+# Deployment: busybox writing ~119KB/s to the PVC (fills 4Gi in ~10 hours)
 sudo k3s kubectl --kubeconfig "${KUBECONFIG_PATH}" -n "${NAMESPACE}" apply -f - <<'__DISK_FILLUP_DEPLOY__'
 apiVersion: apps/v1
 kind: Deployment

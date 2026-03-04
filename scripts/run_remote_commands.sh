@@ -4,7 +4,6 @@ set -euo pipefail
 CSV_FILE="${1:-hosts.csv}"
 COMMANDS_FILE="${2:-commands.sh}"
 
-PARALLEL="${PARALLEL:-10}"         # max parallel connections
 SSH_TIMEOUT="${SSH_TIMEOUT:-10}"   # connect timeout seconds
 CMD_TIMEOUT="${CMD_TIMEOUT:-120}"  # per-host command timeout seconds
 LOG_DIR="${LOG_DIR:-./logs}"
@@ -43,7 +42,7 @@ if [[ ${#LINES[@]} -eq 0 ]]; then
   exit 1
 fi
 
-echo "Running commands on ${#LINES[@]} host(s) with parallelism=$PARALLEL"
+echo "Running commands on ${#LINES[@]} host(s) sequentially"
 
 # Track results for summary
 RESULT_DIR="$LOG_DIR/.results"
@@ -104,7 +103,7 @@ for attempt in $(seq 1 "$MAX_RETRIES"); do
           -o UserKnownHostsFile=/dev/null \
           -o LogLevel=ERROR \
           "$host" "bash -c $(printf '%q' "$cmds")" \
-      >>"$out" 2>>"$err" || rc=$?
+      > >(tee -a "$out") 2> >(tee -a "$err" >&2) || rc=$?
   if [[ $rc -eq 0 ]]; then break; fi
   echo "  RETRY $host (attempt $attempt/$MAX_RETRIES, rc=$rc)"
   sleep 2
@@ -123,7 +122,9 @@ exit 0
 SCRIPT
 chmod +x "$RUNNER"
 
-printf "%s\n" "${LINES[@]}" | xargs -P "$PARALLEL" -I {} "$RUNNER" "{}"
+for line in "${LINES[@]}"; do
+  "$RUNNER" "$line"
+done
 
 # Summary
 echo ""
