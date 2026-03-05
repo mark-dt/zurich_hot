@@ -63,3 +63,11 @@ kubectl -n argocd get secret argocd-initial-admin-secret -o jsonpath="{.data.pas
 
 # Workshop local execution - EdgeConnect/Livedebugger 
 curl "http://$(kubectl -n workshop get svc payment-service -o jsonpath='{.spec.clusterIP}'):3002/pay?orderId=MY-ORDER-42&amount=99.99"
+
+# 2. Trigger auto-remediation (rollback via repository_dispatch)
+  curl -X POST \
+    -H "Accept: application/vnd.github+json" \
+    -H "Authorization: Bearer YOUR_GITHUB_PAT" \
+    -H "X-GitHub-Api-Version: 2022-11-28" \
+    https://api.github.com/repos/mark-dt/zurich_hot/dispatches \
+    -d '{"event_type":"auto-remediate"}'
