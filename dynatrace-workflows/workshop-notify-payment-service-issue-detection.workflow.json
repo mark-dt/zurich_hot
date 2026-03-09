@@ -66,7 +66,7 @@
         "body": "\nHello {{ recipient_name | default(\"Team\") }},\n\nThis is an automated notification from the **{{ workflow_name | default(\"Workflow System\") }}**.\n\nStatus: {{ event()[\"event.status\"] }}\n\nSummary:\n{{ event()[\"event.description\"] }}\n\n----------------------------------------\nAffected Entities\n----------------------------------------\n{% for entity in event()[\"affected_entity_ids\"] %}\n- {{ entity }}\n{% endfor %}\n\n----------------------------------------\nTriggered at: {{ event()[\"event.start\"] | default(\"N/A\") }}\nWorkflow ID: {{ workflow_id | default(\"N/A\") }}\nRun ID: {{ run_id | default(\"N/A\") }}\n\nBest regards,\n{{ sender_name | default(\"Automation Platform\") }}\n\n---\nThis message was generated automatically. Please do not reply.\n",
         "owner": "mark-dt",
         "title": "{{event()[\"event.name\"]}}",
-        "repository": "zurich_hot",
+        "repository": "quickcart",
         "connectionId": "vu9U3hXa3q0AAAABAClhcHA6ZHluYXRyYWNlLmdpdGh1Yi5jb25uZWN0b3I6Y29ubmVjdGlvbgAGdGVuYW50AAZ0ZW5hbnQAJDZlYjNiNGE0LWU1MTgtMzM2Ni1hOWRiLWM1ZTU2NGE1MmRkY77vVN4V2t6t"
       },
       "action": "dynatrace.github.connector:create-issue",

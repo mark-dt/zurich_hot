@@ -14,6 +14,8 @@ spec:
     metadata:
       labels:
         app: order-service
+        app.kubernetes.io/version: "1.0.0"
+        app.kubernetes.io/part-of: "workshop"
     spec:
       containers:
         - name: order-service
@@ -27,6 +29,12 @@ spec:
               value: "http://payment-service.workshop.svc.cluster.local:3002"
             - name: INVENTORY_SERVICE_URL
               value: "http://inventory-service.workshop.svc.cluster.local:3003"
+            - name: DT_RELEASE_VERSION
+              value: "1.0.0"
+            - name: DT_RELEASE_PRODUCT
+              value: "workshop"
+            - name: DT_RELEASE_STAGE
+              value: "production"
           livenessProbe:
             httpGet:
               path: /health

@@ -1,6 +1,6 @@
-# Zurich HOT Workshop
+# QuickCart
 
-Workshop demo environment using [Dynatrace EasyTrade](https://github.com/Dynatrace/easytrade) deployed on a single GCP VM with k3s. The setup demonstrates automated problem detection and remediation with Dynatrace.
+Microservices order processing demo deployed on a single GCP VM with k3s. Demonstrates service-to-service communication, failure injection, and automated problem detection with Dynatrace.
 
 ## Architecture
 

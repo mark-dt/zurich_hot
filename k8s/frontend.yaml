@@ -14,6 +14,8 @@ spec:
     metadata:
       labels:
         app: frontend
+        app.kubernetes.io/version: "1.0.0"
+        app.kubernetes.io/part-of: "workshop"
     spec:
       containers:
         - name: frontend
@@ -25,6 +27,12 @@ spec:
               value: "3000"
             - name: ORDER_SERVICE_URL
               value: "http://order-service.workshop.svc.cluster.local:3001"
+            - name: DT_RELEASE_VERSION
+              value: "1.0.0"
+            - name: DT_RELEASE_PRODUCT
+              value: "workshop"
+            - name: DT_RELEASE_STAGE
+              value: "production"
           livenessProbe:
             httpGet:
               path: /health

@@ -1,9 +1,12 @@
 const express = require("express");
 const http = require("http");
+const path = require("path");
 
 const app = express();
 const PORT = process.env.PORT || 3000;
 const ORDER_SERVICE = process.env.ORDER_SERVICE_URL || "http://order-service.workshop.svc.cluster.local:3001";
+
+app.use(express.static(path.join(__dirname, "public")));
 
 function fetch(url) {
   return new Promise((resolve, reject) => {

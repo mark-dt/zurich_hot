@@ -35,7 +35,7 @@
     "trigger_github_rollback": {
       "name": "trigger_github_rollback",
       "input": {
-        "url": "https://api.github.com/repos/mark-dt/zurich_hot/dispatches",
+        "url": "https://api.github.com/repos/mark-dt/quickcart/dispatches",
         "body": {
           "event_type": "auto-remediate"
         },
@@ -59,7 +59,7 @@
     "js_trigger_github_rollback": {
       "name": "js_trigger_github_rollback",
       "input": {
-        "script": "// optional import of sdk modules\nimport { execution } from '@dynatrace-sdk/automation-utils';\n\n\nexport default async function ({ execution_id }) {                                                                                                                                                 \n    // Trigger auto-remediation workflow via GitHub repository_dispatch\n    const response = await fetch(\"https://api.github.com/repos/mark-dt/zurich_hot/dispatches\", {                                                                                                     \n      method: \"POST\",                                       \n      headers: {                                                                                                                                                                                     \n        \"Accept\": \"application/vnd.github+json\",\n        // Contents: write (!)\n        \"Authorization\": \"Bearer {{ env.GITHUB_PAT }}\",\n        \"X-GitHub-Api-Version\": \"2022-11-28\"\n      },\n      body: JSON.stringify({\n        \"event_type\": \"auto-remediate\"\n      })\n    });\n\n\n  console.log(response)\n    return {\n      status: response.status,\n      success: response.status === 204\n    };\n  }\n"
+        "script": "// optional import of sdk modules\nimport { execution } from '@dynatrace-sdk/automation-utils';\n\n\nexport default async function ({ execution_id }) {                                                                                                                                                 \n    // Trigger auto-remediation workflow via GitHub repository_dispatch\n    const response = await fetch(\"https://api.github.com/repos/mark-dt/quickcart/dispatches\", {                                                                                                     \n      method: \"POST\",                                       \n      headers: {                                                                                                                                                                                     \n        \"Accept\": \"application/vnd.github+json\",\n        // Contents: write (!)\n        \"Authorization\": \"Bearer {{ env.GITHUB_PAT }}\",\n        \"X-GitHub-Api-Version\": \"2022-11-28\"\n      },\n      body: JSON.stringify({\n        \"event_type\": \"auto-remediate\"\n      })\n    });\n\n\n  console.log(response)\n    return {\n      status: response.status,\n      success: response.status === 204\n    };\n  }\n"
       },
       "action": "dynatrace.automations:run-javascript",
       "position": {
