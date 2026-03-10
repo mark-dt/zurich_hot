@@ -1,6 +1,6 @@
 # QuickCart
 
-Microservices order processing demo deployed on a single GCP VM with k3s. Built for Dynatrace HOT (Hands-On Training) sessions — demonstrates service-to-service communication, failure injection, and automated problem detection/remediation with Dynatrace.
+Microservices order processing demo for Dynatrace HOT (Hands-On Training) sessions — demonstrates service-to-service communication, failure injection, and automated problem detection/remediation with Dynatrace.
 
 ## Architecture
 
@@ -106,27 +106,12 @@ Import into Dynatrace via **Automations > Workflows**. Sensitive fields (`id`, `
 5. Service recovers ──> problem closes
 ```
 
-## Manual Scripts
+## Scripts
 
 | Script | Description |
 |---|---|
 | `scripts/deploy-bad-release.sh [RATE]` | Sets failure rate on payment-service (default: 0.7 = 70% failures) |
 | `scripts/rollback.sh` | Resets failure rate to 0 |
-
-Run these directly on the VM where k3s is running.
-
-## Startup Script
-
-**File:** `startup.sh`
-
-Referenced by Terraform `google_compute_instance`. Bootstraps the VM:
-
-1. Installs Docker and k3s (single-node cluster)
-2. Clones this repository
-3. Builds all service Docker images locally
-4. Imports images into k3s containerd (`docker save` → `k3s ctr images import`)
-5. Applies all Kubernetes manifests
-6. Patches ingress IP from GCP metadata (`workshop.{IP}.nip.io`)
 
 ## K8s Manifests
 
@@ -150,13 +135,9 @@ All service pods include Dynatrace release tracking labels (`app.kubernetes.io/v
 |---|---|
 | `DT_ENV_URL` | Dynatrace environment URL, e.g. `https://abc12345.live.dynatrace.com` |
 | `DT_API_TOKEN` | Dynatrace API token with `events.ingest` scope |
-| `EASYTRADE_BASE_URL` | EasyTrade base URL, e.g. `http://<VM-IP>` |
-| `WORKSHOP_IP` | Workshop VM IP address |
+| `EASYTRADE_BASE_URL` | EasyTrade base URL |
+| `WORKSHOP_IP` | Workshop IP address |
 | `K8_CLUSTER` | Dynatrace cluster identifier for entity selectors |
-| `GCP_SA_KEY` | GCP service account key JSON |
-| `GCP_PROJECT` | GCP project ID |
-| `VM_NAME` | GCP VM instance name |
-| `VM_ZONE` | GCP VM zone |
 
 ### Dynatrace
 
