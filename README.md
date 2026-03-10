@@ -1,6 +1,6 @@
 # QuickCart
 
-Microservices order processing demo deployed on a single GCP VM with k3s. Demonstrates service-to-service communication, failure injection, and automated problem detection with Dynatrace.
+Microservices order processing demo deployed on a single GCP VM with k3s. Built for Dynatrace HOT (Hands-On Training) sessions — demonstrates service-to-service communication, failure injection, and automated problem detection/remediation with Dynatrace.
 
 ## Architecture
 
@@ -27,9 +27,9 @@ Microservices order processing demo deployed on a single GCP VM with k3s. Demons
 
 | Service | Port | Description |
 |---|---|---|
-| **frontend** | 3000 | API gateway — receives requests and forwards to order-service |
+| **frontend** | 3000 | API gateway — receives requests and forwards to order-service. Proxies `/admin/failure-rate` to all payment-service pods via headless service DNS |
 | **order-service** | 3001 | Orchestrates orders — calls payment-service and inventory-service in parallel |
-| **payment-service** | 3002 | Processes payments — calls notification-service on success. Supports `FAILURE_RATE` env var to simulate failures |
+| **payment-service** | 3002 | Processes payments — calls notification-service on success. Has a runtime-mutable failure rate (`POST /admin/failure-rate` with `{"rate": 0.7}`) — no pod restart needed |
 | **inventory-service** | 3003 | Checks stock availability (leaf service) |
 | **notification-service** | 3004 | Sends order confirmations via email (leaf service) |
 | **load-generator** | — | Continuously hits `frontend /order` every 2 seconds to generate traffic |
@@ -38,7 +38,7 @@ All services are minimal Node.js/Express apps with structured JSON logging and h
 
 ## EasyTrade Feature Flags
 
-EasyTrade exposes 4 problem patterns via its feature flag service:
+EasyTrade is a separate Dynatrace demo trading app with problem patterns controlled via feature flags:
 
 | Flag | Affected Service | What It Simulates |
 |---|---|---|
@@ -49,54 +49,60 @@ EasyTrade exposes 4 problem patterns via its feature flag service:
 
 Flags are toggled via: `PUT /feature-flag-service/v1/flags/{flag_key}` with body `{"enabled": true/false}`
 
-## GitHub Actions Pipelines
+## GitHub Actions Workflows
 
-### Feature Flag Workflows (one per flag)
+All workflows are in `.github/workflows/`, prefixed by target app (`workshop-` or `easytrade-`).
 
-Each workflow is a `workflow_dispatch` with an **enable/disable** choice. It toggles the flag on EasyTrade and sends a `CUSTOM_DEPLOYMENT` event to Dynatrace.
+### Workshop App Workflows
 
-| Workflow | File |
+| Workflow | File | Trigger |
+|---|---|---|
+| Build and Push | `workshop-build-and-push.yaml` | Push to `main` (when `services/` changes) |
+| Deploy Bad Release | `workshop-deploy-bad-release.yaml` | `workflow_dispatch`, `repository_dispatch` (`auto-remediate`) |
+| GitOps Release | `workshop-release.yaml` | `workflow_dispatch`, `repository_dispatch` (`auto-remediate-release`) |
+
+- **Build and Push** — Builds all 5 service Docker images and pushes them to GHCR.
+- **Deploy Bad Release** — Sets or rolls back the payment-service failure rate via HTTP API. Supports both manual dispatch and automated remediation.
+- **GitOps Release** — Commits version label and failure rate changes to `k8s/payment-service.yaml` for ArgoCD sync. Uses `yq` to update the manifest. Bumps version to `bad-release-<N>` or `rollback-<N>`.
+
+### EasyTrade Workflows
+
+| Workflow | File | Trigger |
+|---|---|---|
+| Feature Flag: DB Not Responding | `easytrade-ff-db-not-responding.yaml` | `workflow_dispatch` |
+| Feature Flag: Factory Crisis | `easytrade-ff-factory-crisis.yaml` | `workflow_dispatch` |
+| Feature Flag: Aggregator Slowdown | `easytrade-ff-ergo-aggregator-slowdown.yaml` | `workflow_dispatch` |
+| Feature Flag: High CPU Usage | `easytrade-ff-high-cpu-usage.yaml` | `workflow_dispatch` |
+| Auto-Remediation | `easytrade-auto-remediation.yaml` | `repository_dispatch` (`remediation`) |
+| Simulate Release | `easytrade-simulate-release.yaml` | `workflow_dispatch` |
+
+Feature flag workflows toggle a flag on EasyTrade and send a `CUSTOM_DEPLOYMENT` event to Dynatrace. The auto-remediation workflow is triggered by Dynatrace via `repository_dispatch` with `{ "ff_key": "<flag>" }` in the payload.
+
+### Workflow Patterns
+
+- "Resolve action" step handles both `workflow_dispatch` and `repository_dispatch` triggers
+- Dynatrace deployment events use `K8_CLUSTER` secret with `entitySelector` using `entityName.startsWith()` and environment tag
+- Heredocs must be unquoted (`<<EOF` not `<<'EOF'`) so shell variables expand
+
+## Dynatrace Workflows
+
+Exported workflow JSONs in `dynatrace-workflows/`:
+
+| File | Purpose |
 |---|---|
-| Release: DB Not Responding | `.github/workflows/ff-db-not-responding.yaml` |
-| Release: Factory Crisis | `.github/workflows/ff-factory-crisis.yaml` |
-| Release: Aggregator Slowdown | `.github/workflows/ff-ergo-aggregator-slowdown.yaml` |
-| Release: High CPU Usage | `.github/workflows/ff-high-cpu-usage.yaml` |
+| `workshop-auto-remediation-payment-service-failure-rate-rollback.workflow.json` | Auto-remediates payment-service failure rate issues |
+| `workshop-notify-payment-service-issue-detection.workflow.json` | Notifies on payment-service problem detection |
+| `workshop-predictive-pvc-usage.workflow.json` | Predictive PVC usage monitoring |
 
-### Auto-Remediation Pipeline
-
-**File:** `.github/workflows/auto-remediation.yaml`
-
-Triggered automatically by Dynatrace via `repository_dispatch` (event type: `remediation`). Receives `{ "ff_key": "<flag>" }` in the payload, disables the specified feature flag, and sends a remediation event back to Dynatrace.
-
-### Build and Push
-
-**File:** `.github/workflows/build-and-push.yaml`
-
-Builds all 5 service Docker images on push to `main` (when `services/` changes) and pushes them to GHCR.
-
-### Deploy Bad Release (Custom Services)
-
-**File:** `.github/workflows/deploy-bad-release.yaml`
-
-Manual `workflow_dispatch` to set `FAILURE_RATE` on payment-service via SSH into the VM. Supports `deploy-bad-release` and `rollback` actions.
-
-## Dynatrace Workflow
-
-**File:** `dynatrace-workflow.json`
-
-Import into Dynatrace via **Automations > Workflows**. The workflow:
-
-1. **Triggers** on Davis problem detection (error category on EasyTrade entities)
-2. **Identifies** the responsible feature flag by mapping the affected service name
-3. **Calls** the GitHub `auto-remediation` pipeline via `repository_dispatch` to disable the flag
+Import into Dynatrace via **Automations > Workflows**. Sensitive fields (`id`, `actor`, `owner`, `ownerType`) are removed before committing. GitHub PAT is referenced as `{{ env.GITHUB_PAT }}` — never hardcode tokens.
 
 ### Remediation Loop
 
 ```
-1. Trigger feature flag pipeline (enable) ──> EasyTrade starts failing
+1. Trigger bad release / feature flag ──> Service starts failing
 2. Dynatrace detects failure rate increase ──> Davis opens a problem
-3. Dynatrace workflow fires ──> identifies the flag ──> calls GitHub API
-4. auto-remediation.yaml runs ──> disables the flag ──> sends event to Dynatrace
+3. Dynatrace workflow fires ──> calls GitHub API via repository_dispatch
+4. Remediation workflow runs ──> fixes the issue ──> sends event to Dynatrace
 5. Service recovers ──> problem closes
 ```
 
@@ -104,8 +110,8 @@ Import into Dynatrace via **Automations > Workflows**. The workflow:
 
 | Script | Description |
 |---|---|
-| `scripts/deploy-bad-release.sh [RATE]` | Sets `FAILURE_RATE` on payment-service (default: 0.7 = 70% failures) |
-| `scripts/rollback.sh` | Resets `FAILURE_RATE` to 0 |
+| `scripts/deploy-bad-release.sh [RATE]` | Sets failure rate on payment-service (default: 0.7 = 70% failures) |
+| `scripts/rollback.sh` | Resets failure rate to 0 |
 
 Run these directly on the VM where k3s is running.
 
@@ -118,8 +124,9 @@ Referenced by Terraform `google_compute_instance`. Bootstraps the VM:
 1. Installs Docker and k3s (single-node cluster)
 2. Clones this repository
 3. Builds all service Docker images locally
-4. Imports images into k3s containerd
+4. Imports images into k3s containerd (`docker save` → `k3s ctr images import`)
 5. Applies all Kubernetes manifests
+6. Patches ingress IP from GCP metadata (`workshop.{IP}.nip.io`)
 
 ## K8s Manifests
 
@@ -128,10 +135,12 @@ All manifests are in `k8s/` and deploy to the `workshop` namespace:
 - `namespace.yaml` — creates the `workshop` namespace
 - `frontend.yaml` — Deployment (2 replicas) + ClusterIP Service
 - `order-service.yaml` — Deployment (2 replicas) + ClusterIP Service
-- `payment-service.yaml` — Deployment (2 replicas) + ClusterIP Service
+- `payment-service.yaml` — Deployment (2 replicas) + ClusterIP + headless Service (`payment-service-headless`)
 - `inventory-service.yaml` — Deployment (2 replicas) + ClusterIP Service
 - `notification-service.yaml` — Deployment (1 replica) + ClusterIP Service
 - `load-generator.yaml` — Deployment running a curl loop for continuous traffic
+
+All service pods include Dynatrace release tracking labels (`app.kubernetes.io/version`, `app.kubernetes.io/part-of`) and env vars (`DT_RELEASE_VERSION`, `DT_RELEASE_PRODUCT`, `DT_RELEASE_STAGE`). Baseline version is `1.0.0`.
 
 ## Required Secrets
 
@@ -139,10 +148,12 @@ All manifests are in `k8s/` and deploy to the `workshop` namespace:
 
 | Secret | Description |
 |---|---|
-| `EASYTRADE_BASE_URL` | EasyTrade base URL, e.g. `http://<VM-IP>` |
 | `DT_ENV_URL` | Dynatrace environment URL, e.g. `https://abc12345.live.dynatrace.com` |
 | `DT_API_TOKEN` | Dynatrace API token with `events.ingest` scope |
-| `GCP_SA_KEY` | GCP service account key JSON (for deploy-bad-release SSH) |
+| `EASYTRADE_BASE_URL` | EasyTrade base URL, e.g. `http://<VM-IP>` |
+| `WORKSHOP_IP` | Workshop VM IP address |
+| `K8_CLUSTER` | Dynatrace cluster identifier for entity selectors |
+| `GCP_SA_KEY` | GCP service account key JSON |
 | `GCP_PROJECT` | GCP project ID |
 | `VM_NAME` | GCP VM instance name |
 | `VM_ZONE` | GCP VM zone |
@@ -151,6 +162,6 @@ All manifests are in `k8s/` and deploy to the `workshop` namespace:
 
 | Setting | Description |
 |---|---|
-| `GITHUB_PAT` environment variable | GitHub Personal Access Token with `repo` scope (for repository_dispatch) |
+| `GITHUB_PAT` environment variable | GitHub Personal Access Token with `repo` scope (for `repository_dispatch`) |
 
 Set this in **Dynatrace > Automations > Settings > Environment Variables**.

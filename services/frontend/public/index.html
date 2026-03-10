@@ -466,7 +466,7 @@
 
         totalOrders++;
         totalMs += duration;
-        const success = res.ok && data.status === 'success';
+        const success = res.ok && data.status === 'confirmed';
         if (!success) failedOrders++;
 
         updateStats();
@@ -512,7 +512,7 @@
       if (list.querySelector('.empty-state')) list.innerHTML = '';
 
       const orderId = data.orderId || '???';
-      const payOk = data.payment?.status === 'success';
+      const payOk = data.payment?.paymentStatus === 'confirmed';
       const invOk = data.inventory?.inStock !== false;
 
       const entry = document.createElement('div');
