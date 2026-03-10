@@ -8,8 +8,9 @@ Workshop demo environment for Dynatrace HOT (Hands-On Training) sessions. Combin
 ## Architecture
 
 ### Workshop App (k8s/k3s)
-- Services run in `workshop` namespace on k3s
+- Services run in `workshop` namespace on a GCP VM with k3s
 - Frontend proxies `/admin/failure-rate` to all payment-service pods via headless service DNS (`payment-service-headless`)
+- Ingress: `workshop.PLACEHOLDER_IP.nip.io` → frontend (IP patched at startup via GCP metadata)
 - Payment-service has a runtime-mutable failure rate (`POST /admin/failure-rate` with `{"rate": 0.7}`)
 - No pod restarts needed for failure rate changes — all replicas updated via API fan-out
 
@@ -22,15 +23,6 @@ All service manifests include labels and env vars for Dynatrace release tracking
 ### EasyTrade
 - Feature flags toggled via `PUT {EASYTRADE_BASE_URL}/feature-flag-service/v1/flags/{FF_KEY}`
 - Flags: `db_not_responding`, `factory_crisis`, `ergo_aggregator_slowdown`, `high_cpu_usage`
-
-## Project Structure
-```
-services/                  # Node.js microservices (frontend, order, payment, inventory, notification)
-k8s/                       # Kubernetes manifests for workshop namespace
-.github/workflows/         # GitHub Actions (workshop-* and easytrade-* prefixed)
-dynatrace-workflows/       # Exported Dynatrace workflow JSONs
-scripts/                   # deploy-bad-release.sh, rollback.sh
-```
 
 ## GitHub Workflows
 All in `.github/workflows/`, prefixed by target app:
@@ -52,4 +44,9 @@ Exported workflow JSONs in `dynatrace-workflows/` folder:
 - GitHub PAT referenced as `{{ env.GITHUB_PAT }}` — never hardcode tokens
 
 ## Secrets (GitHub Actions)
-`DT_ENV_URL`, `DT_API_TOKEN`, `WORKSHOP_IP`, `K8_CLUSTER`, `EASYTRADE_BASE_URL`
+`DT_ENV_URL`, `DT_API_TOKEN`, `WORKSHOP_IP`, `K8_CLUSTER`, `EASYTRADE_BASE_URL`, `GCP_SA_KEY`, `VM_NAME`, `VM_ZONE`, `GCP_PROJECT`
+
+## Dev Notes
+- VM startup script: `startup.sh` — clones repo, builds images, imports to k3s containerd, applies k8s manifests
+- Images built locally on VM (no registry) — `docker build` → `docker save` → `k3s ctr images import`
+- After code changes: must rebuild image + restart deployment on VM
